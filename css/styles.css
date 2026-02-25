@@ -72,8 +72,42 @@ h2 {
   border-radius: 8px;
 }
 
+.controls-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 16px;
+  align-items: stretch;
+  width: 100%;
+}
+
 .control-section {
-  margin-bottom: 20px;
+  background: white;
+  padding: 18px;
+  border-radius: 10px;
+  box-shadow: 0 6px 18px rgba(18, 38, 63, 0.06);
+  border: 1px solid rgba(15, 23, 42, 0.04);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-height: 130px;
+  height: 100%;
+}
+
+.control-section h3 {
+  margin: 0;
+  font-size: 1rem;
+  color: #2c3e50;
+}
+
+.control-actions button {
+  flex: 1 1 0;
+  min-width: 80px;
+}
+
+.control-section .control-actions {
+  display: flex;
+  gap: 10px;
+  align-items: center;
 }
 
 .control-section:last-child {
@@ -93,6 +127,47 @@ h2 {
   flex-wrap: wrap;
 }
 
+.erg-side-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.erg-btn {
+  width: 56px;
+  height: 56px;
+  border-radius: 8px;
+  background: #667eea;
+  color: white;
+  border: none;
+  font-size: 1.25rem;
+  font-weight: 600;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.erg-btn:hover:not(:disabled) {
+  background: #5a6fd8;
+}
+
+#pause-ride-btn {
+  background: #f1c40f;
+  color: #2c3e50;
+  border: none;
+  padding: 10px 18px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-weight: 600;
+}
+
+#pause-ride-btn:disabled {
+  background: #f7e7a7;
+  cursor: not-allowed;
+}
+
 .erg-controls label, .end-ride-controls label {
   color: #6c757d;
   font-size: 0.875rem;
@@ -102,8 +177,20 @@ input[type="number"] {
   padding: 8px 12px;
   border: 1px solid #ced4da;
   border-radius: 4px;
-  width: 120px;
+  width: auto;
   font-size: 0.875rem;
+}
+
+#target-power {
+  min-width: 72px;
+  max-width: 160px;
+  width: 100%;
+  text-align: center;
+  font-size: 1.125rem;
+  font-weight: 600;
+  padding: 10px 12px;
+  box-sizing: border-box;
+  flex: 1 1 auto;
 }
 
 input[type="number"]:focus {
@@ -122,6 +209,11 @@ input[type="number"]:focus {
   font-size: 0.875rem;
   font-weight: 500;
   transition: background 0.2s;
+}
+
+.btn-primary.small {
+  padding: 8px 14px;
+  font-size: 0.875rem;
 }
 
 .btn-primary:hover:not(:disabled) {
@@ -164,6 +256,8 @@ input[type="number"]:focus {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
   gap: 20px;
+  align-items: stretch;
+  grid-auto-rows: 1fr;
 }
 
 .metric-card {
@@ -172,6 +266,11 @@ input[type="number"]:focus {
   border-radius: 8px;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
   text-align: center;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  height: 100%;
 }
 
 .metric-card h3 {
@@ -183,10 +282,13 @@ input[type="number"]:focus {
 }
 
 .metric-value {
-  font-size: 2.5rem;
+  font-size: clamp(1.25rem, 5vw, 2.5rem);
   font-weight: 700;
   color: #2c3e50;
   margin-bottom: 5px;
+  max-width: 100%;
+  overflow-wrap: break-word;
+  word-break: break-word;
 }
 
 .metric-label {
@@ -202,6 +304,16 @@ input[type="number"]:focus {
   margin-top: 8px;
   padding-top: 8px;
   border-top: 1px solid #e9ecef;
+}
+
+/* Ensure time value scales on very narrow screens and never overflows its card */
+#time {
+  font-size: clamp(1.4rem, 9vw, 2.5rem);
+  line-height: 1;
+  padding: 2px 6px;
+  box-sizing: border-box;
+  max-width: 100%;
+  word-break: break-word;
 }
 
 .ride-summary {
@@ -266,6 +378,19 @@ input[type="number"]:focus {
     align-items: stretch;
   }
 
+  .controls-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .control-actions {
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  header h1, .trainer-controls h2 {
+    text-align: center;
+  }
+
   input[type="number"] {
     width: 100%;
   }
@@ -276,5 +401,48 @@ input[type="number"]:focus {
 
   .summary-content {
     grid-template-columns: 1fr;
+  }
+}
+
+/* Explicit responsive grid breakpoints to avoid awkward wrapping around 700-900px */
+@media (min-width: 900px) {
+  .controls-grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+  .metrics-grid {
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  }
+}
+
+@media (min-width: 640px) and (max-width: 899px) {
+  /* tablet / medium screens: two columns for controls */
+  .controls-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  .control-actions {
+    align-items: stretch;
+  }
+  .control-actions button {
+    width: 100%;
+  }
+}
+
+@media (max-width: 639px) {
+  /* phone: single column, stacked full-width controls */
+  .controls-grid {
+    grid-template-columns: 1fr;
+  }
+  .control-actions {
+    flex-direction: column;
+    gap: 8px;
+  }
+  .control-actions button {
+    width: 100%;
+  }
+  header {
+    padding: 16px;
+  }
+  main {
+    padding: 16px;
   }
 }

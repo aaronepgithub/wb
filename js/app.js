@@ -16,16 +16,20 @@ let trainingStatusCharacteristic = null;
 let rideInterval = null;
 let rideData = {
   startTime: null,
-  totalDistance: 0,
+  totalDistanceMiles: 0,
   powerValues: [],
   cadenceValues: [],
   speedValues: [],
-  lastSpeedKmh: 0,
+  lastSpeedMph: 0,
   lastCadenceRpm: 0,
   lastPowerWatts: 0,
   targetPowerWatts: 200,
   isRiding: false
 };
+
+let isPaused = false;
+let pauseStart = null;
+let pausedTotal = 0;
 
 async function connectToTrainer() {
   try {
@@ -98,17 +102,20 @@ function handleIndoorBikeData(event) {
   const data = parseIndoorBikeData(value);
 
   if (data) {
-    rideData.lastSpeedKmh = data.speedKmh;
+    // convert km/h to mph
+    const speedMph = data.speedKmh / 1.60934;
+    rideData.lastSpeedMph = speedMph;
     rideData.lastCadenceRpm = data.cadenceRpm;
     rideData.lastPowerWatts = data.powerWatts;
 
     // Accumulate data for averages
-    if (rideData.isRiding) {
+    if (rideData.isRiding && !isPaused) {
       const elapsedSeconds = (Date.now() - rideData.startTime) / 1000;
       rideData.powerValues.push(data.powerWatts);
       rideData.cadenceValues.push(data.cadenceRpm);
-      rideData.speedValues.push(data.speedKmh);
-      rideData.totalDistance = (rideData.totalDistance + (data.speedKmh / 3600)); // km per second
+      rideData.speedValues.push(speedMph);
+      // accumulate miles per second
+      rideData.totalDistanceMiles = (rideData.totalDistanceMiles + (speedMph / 3600));
 
       updateLiveMetrics();
     }
@@ -178,11 +185,11 @@ function setTargetPower() {
 function startRide() {
   rideData = {
     startTime: Date.now(),
-    totalDistance: 0,
+    totalDistanceMiles: 0,
     powerValues: [],
     cadenceValues: [],
     speedValues: [],
-    lastSpeedKmh: 0,
+    lastSpeedMph: 0,
     lastCadenceRpm: 0,
     lastPowerWatts: 0,
     targetPowerWatts: parseInt(document.getElementById('target-power').value),
@@ -192,25 +199,34 @@ function startRide() {
   // Set initial target power
   setTargetPower();
 
+  isPaused = false;
+  pausedTotal = 0;
+  pauseStart = null;
+
   rideInterval = setInterval(updateLiveMetrics, 1000);
   document.getElementById('start-ride-btn').disabled = true;
   document.getElementById('end-ride-btn').disabled = false;
-  document.getElementById('set-erg-btn').disabled = false;
+  document.getElementById('pause-ride-btn').disabled = false;
 }
 
 function endRide() {
   clearInterval(rideInterval);
   rideData.isRiding = false;
+  isPaused = false;
   showRideSummary();
   document.getElementById('end-ride-btn').disabled = true;
+  document.getElementById('pause-ride-btn').disabled = true;
+  document.getElementById('pause-ride-btn').textContent = 'Pause';
+  document.getElementById('start-ride-btn').disabled = false;
 }
 
 function updateLiveMetrics() {
   document.getElementById('power').textContent = rideData.lastPowerWatts.toFixed(0);
   document.getElementById('cadence').textContent = rideData.lastCadenceRpm.toFixed(0);
-  document.getElementById('speed').textContent = rideData.lastSpeedKmh.toFixed(1);
-  document.getElementById('distance').textContent = rideData.totalDistance.toFixed(2);
-  document.getElementById('time').textContent = formatTime(Date.now() - rideData.startTime);
+  document.getElementById('speed').textContent = rideData.lastSpeedMph.toFixed(1);
+  document.getElementById('distance').textContent = rideData.totalDistanceMiles.toFixed(2);
+  const elapsedMs = Date.now() - rideData.startTime - pausedTotal;
+  document.getElementById('time').textContent = formatTime(elapsedMs);
 
   // Update average displays
   if (rideData.powerValues.length > 0) {
@@ -239,8 +255,10 @@ function showRideSummary() {
 
   document.getElementById('ride-summary').style.display = 'block';
 
-  document.getElementById('summary-time').textContent = formatTime(duration);
-  document.getElementById('summary-distance').textContent = rideData.totalDistance.toFixed(2) + ' km';
+  // account for paused time
+  const totalElapsed = Date.now() - rideData.startTime - pausedTotal;
+  document.getElementById('summary-time').textContent = formatTime(totalElapsed);
+  document.getElementById('summary-distance').textContent = rideData.totalDistanceMiles.toFixed(2) + ' miles';
 
   const avgPower = rideData.powerValues.length > 0
     ? rideData.powerValues.reduce((a, b) => a + b, 0) / rideData.powerValues.length
@@ -265,19 +283,51 @@ function showRideSummary() {
 
   document.getElementById('summary-avg-power').textContent = avgPower.toFixed(0) + ' watts';
   document.getElementById('summary-avg-cadence').textContent = avgCadence.toFixed(0) + ' rpm';
-  document.getElementById('summary-avg-speed').textContent = avgSpeed.toFixed(1) + ' km/h';
+  document.getElementById('summary-avg-speed').textContent = avgSpeed.toFixed(1) + ' mph';
   document.getElementById('summary-max-power').textContent = maxPower.toFixed(0) + ' watts';
   document.getElementById('summary-max-cadence').textContent = maxCadence.toFixed(0) + ' rpm';
-  document.getElementById('summary-max-speed').textContent = maxSpeed.toFixed(1) + ' km/h';
+  document.getElementById('summary-max-speed').textContent = maxSpeed.toFixed(1) + ' mph';
 }
 
 // Event listeners
 document.getElementById('connect-btn').addEventListener('click', connectToTrainer);
 document.getElementById('disconnect-btn').addEventListener('click', disconnectFromTrainer);
-document.getElementById('set-erg-btn').addEventListener('click', setTargetPower);
 document.getElementById('start-ride-btn').addEventListener('click', startRide);
 document.getElementById('end-ride-btn').addEventListener('click', endRide);
 document.getElementById('new-ride-btn').addEventListener('click', () => {
   document.getElementById('ride-summary').style.display = 'none';
   document.getElementById('start-ride-btn').disabled = false;
+});
+
+// ERG +/- buttons adjust target by 5 watts per click
+document.getElementById('erg-increase').addEventListener('click', () => {
+  const inp = document.getElementById('target-power');
+  const val = parseInt(inp.value) || 0;
+  inp.value = val + 5;
+  setTargetPower();
+});
+document.getElementById('erg-decrease').addEventListener('click', () => {
+  const inp = document.getElementById('target-power');
+  const val = parseInt(inp.value) || 0;
+  inp.value = Math.max(0, val - 5);
+  setTargetPower();
+});
+
+// Pause/Resume handling
+document.getElementById('pause-ride-btn').addEventListener('click', () => {
+  const btn = document.getElementById('pause-ride-btn');
+  if (!isPaused) {
+    // pause
+    isPaused = true;
+    pauseStart = Date.now();
+    clearInterval(rideInterval);
+    btn.textContent = 'Resume';
+  } else {
+    // resume
+    isPaused = false;
+    pausedTotal += Date.now() - pauseStart;
+    pauseStart = null;
+    rideInterval = setInterval(updateLiveMetrics, 1000);
+    btn.textContent = 'Pause';
+  }
 });

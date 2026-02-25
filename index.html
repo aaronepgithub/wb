@@ -17,28 +17,35 @@
         <main>
             <section class="trainer-controls">
                 <h2>Trainer Control</h2>
-                <div class="control-section">
-                    <button id="connect-btn" class="btn-primary">Connect to Trainer</button>
-                    <button id="disconnect-btn" class="btn-secondary" disabled>Disconnect</button>
+                <div class="controls-grid">
+                <div class="control-section connection-section">
+                    <h3>Connection</h3>
+                    <div class="control-actions">
+                        <button id="connect-btn" class="btn-primary">Connect</button>
+                        <button id="disconnect-btn" class="btn-primary" disabled>Disconnect</button>
+                    </div>
                 </div>
 
-                <div class="control-section">
+                <div class="control-section erg-section">
                     <h3>ERG Mode</h3>
-                    <div class="erg-controls">
+                    <div class="control-actions">
                         <label for="target-power">Target Power (Watts):</label>
-                        <input type="number" id="target-power" min="50" max="1000" value="200" step="10">
-                        <button id="set-erg-btn">Set Power</button>
+                        <div class="erg-side-controls">
+                            <button id="erg-decrease" class="erg-btn">−</button>
+                            <input type="number" id="target-power" min="50" max="1000" value="200" step="5">
+                            <button id="erg-increase" class="erg-btn">+</button>
+                        </div>
                     </div>
                 </div>
 
-                <div class="control-section">
-                    <h3>End Ride</h3>
-                    <div class="end-ride-controls">
-                        <label for="ride-duration">Ride Duration (minutes):</label>
-                        <input type="number" id="ride-duration" min="1" max="180" value="60">
-                        <button id="start-ride-btn">Start Ride</button>
-                        <button id="end-ride-btn" disabled>End Ride</button>
+                <div class="control-section timer-section">
+                    <h3>Activity Timer</h3>
+                    <div class="control-actions">
+                        <button id="start-ride-btn" class="btn-primary">Start Ride</button>
+                        <button id="pause-ride-btn" disabled>Pause</button>
+                        <button id="end-ride-btn" disabled class="btn-primary">End Ride</button>
                     </div>
+                </div>
                 </div>
             </section>
 
@@ -60,13 +67,13 @@
                     <div class="metric-card">
                         <h3>Speed</h3>
                         <div class="metric-value" id="speed">0</div>
-                        <div class="metric-label">km/h</div>
+                        <div class="metric-label">mph</div>
                         <div class="metric-avg" id="avg-speed">0</div>
                     </div>
                     <div class="metric-card">
                         <h3>Distance</h3>
                         <div class="metric-value" id="distance">0</div>
-                        <div class="metric-label">km</div>
+                        <div class="metric-label">miles</div>
                     </div>
                     <div class="metric-card">
                         <h3>Time</h3>
@@ -84,7 +91,7 @@
                     </div>
                     <div class="summary-item">
                         <span class="summary-label">Total Distance:</span>
-                        <span class="summary-value" id="summary-distance">0 km</span>
+                        <span class="summary-value" id="summary-distance">0 miles</span>
                     </div>
                     <div class="summary-item">
                         <span class="summary-label">Average Power:</span>
@@ -96,7 +103,7 @@
                     </div>
                     <div class="summary-item">
                         <span class="summary-label">Average Speed:</span>
-                        <span class="summary-value" id="summary-avg-speed">0 km/h</span>
+                        <span class="summary-value" id="summary-avg-speed">0 mph</span>
                     </div>
                     <div class="summary-item">
                         <span class="summary-label">Max Power:</span>
@@ -108,7 +115,7 @@
                     </div>
                     <div class="summary-item">
                         <span class="summary-label">Max Speed:</span>
-                        <span class="summary-value" id="summary-max-speed">0 km/h</span>
+                        <span class="summary-value" id="summary-max-speed">0 mph</span>
                     </div>
                 </div>
                 <button id="new-ride-btn">New Ride</button>
@@ -116,6 +123,6 @@
         </main>
     </div>
 
-    <script src="app.js"></script>
+    <script src="js/app.js"></script>
 </body>
 </html>
