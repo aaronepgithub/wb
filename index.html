@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Wahoo KICKR Trainer Control</title>
+    <link rel="stylesheet" href="css/styles.css">
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>Wahoo KICKR Trainer Control</h1>
+            <div id="connection-status" class="status-disconnected">Disconnected</div>
+        </header>
+
+        <main>
+            <section class="trainer-controls">
+                <h2>Trainer Control</h2>
+                <div class="control-section">
+                    <button id="connect-btn" class="btn-primary">Connect to Trainer</button>
+                    <button id="disconnect-btn" class="btn-secondary" disabled>Disconnect</button>
+                </div>
+
+                <div class="control-section">
+                    <h3>ERG Mode</h3>
+                    <div class="erg-controls">
+                        <label for="target-power">Target Power (Watts):</label>
+                        <input type="number" id="target-power" min="50" max="1000" value="200" step="10">
+                        <button id="set-erg-btn">Set Power</button>
+                    </div>
+                </div>
+
+                <div class="control-section">
+                    <h3>End Ride</h3>
+                    <div class="end-ride-controls">
+                        <label for="ride-duration">Ride Duration (minutes):</label>
+                        <input type="number" id="ride-duration" min="1" max="180" value="60">
+                        <button id="start-ride-btn">Start Ride</button>
+                        <button id="end-ride-btn" disabled>End Ride</button>
+                    </div>
+                </div>
+            </section>
+
+            <section class="metrics-display">
+                <h2>Live Metrics</h2>
+                <div class="metrics-grid">
+                    <div class="metric-card">
+                        <h3>Power</h3>
+                        <div class="metric-value" id="power">0</div>
+                        <div class="metric-label">watts</div>
+                        <div class="metric-avg" id="avg-power">0</div>
+                    </div>
+                    <div class="metric-card">
+                        <h3>Cadence</h3>
+                        <div class="metric-value" id="cadence">0</div>
+                        <div class="metric-label">rpm</div>
+                        <div class="metric-avg" id="avg-cadence">0</div>
+                    </div>
+                    <div class="metric-card">
+                        <h3>Speed</h3>
+                        <div class="metric-value" id="speed">0</div>
+                        <div class="metric-label">km/h</div>
+                        <div class="metric-avg" id="avg-speed">0</div>
+                    </div>
+                    <div class="metric-card">
+                        <h3>Distance</h3>
+                        <div class="metric-value" id="distance">0</div>
+                        <div class="metric-label">km</div>
+                    </div>
+                    <div class="metric-card">
+                        <h3>Time</h3>
+                        <div class="metric-value" id="time">00:00</div>
+                    </div>
+                </div>
+            </section>
+
+            <section class="ride-summary" id="ride-summary" style="display: none;">
+                <h2>Ride Summary</h2>
+                <div class="summary-content">
+                    <div class="summary-item">
+                        <span class="summary-label">Total Time:</span>
+                        <span class="summary-value" id="summary-time">0:00</span>
+                    </div>
+                    <div class="summary-item">
+                        <span class="summary-label">Total Distance:</span>
+                        <span class="summary-value" id="summary-distance">0 km</span>
+                    </div>
+                    <div class="summary-item">
+                        <span class="summary-label">Average Power:</span>
+                        <span class="summary-value" id="summary-avg-power">0 watts</span>
+                    </div>
+                    <div class="summary-item">
+                        <span class="summary-label">Average Cadence:</span>
+                        <span class="summary-value" id="summary-avg-cadence">0 rpm</span>
+                    </div>
+                    <div class="summary-item">
+                        <span class="summary-label">Average Speed:</span>
+                        <span class="summary-value" id="summary-avg-speed">0 km/h</span>
+                    </div>
+                    <div class="summary-item">
+                        <span class="summary-label">Max Power:</span>
+                        <span class="summary-value" id="summary-max-power">0 watts</span>
+                    </div>
+                    <div class="summary-item">
+                        <span class="summary-label">Max Cadence:</span>
+                        <span class="summary-value" id="summary-max-cadence">0 rpm</span>
+                    </div>
+                    <div class="summary-item">
+                        <span class="summary-label">Max Speed:</span>
+                        <span class="summary-value" id="summary-max-speed">0 km/h</span>
+                    </div>
+                </div>
+                <button id="new-ride-btn">New Ride</button>
+            </section>
+        </main>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>
