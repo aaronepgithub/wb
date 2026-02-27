@@ -1,7 +1,7 @@
 // FTMS (Fitness Machine Service) UUIDs
 const FTMS_SERVICE_UUID = '00001826-0000-1000-8000-00805f9b34fb';
 const INDOOR_BIKE_DATA_CHAR_UUID = '00002ad2-0000-1000-8000-00805f9b34fb';
-const INDOOR_BIKE_POWER_POINT_CHAR_UUID = '00002ae0-0000-1000-8000-00805f9b34fb';
+const INDOOR_BIKE_POWER_POINT_CHAR_UUID = '00002ad9-0000-1000-8000-00805f9b34fb';
 const FTMS_FEATURE_CHAR_UUID = '00002acc-0000-1000-8000-00805f9b34fb';
 const MACHINE_STATUS_CHAR_UUID = '00002ada-0000-1000-8000-00805f9b34fb';
 const TRAINING_STATUS_CHAR_UUID = '00002ad3-0000-1000-8000-00805f9b34fb';
@@ -23,7 +23,7 @@ let rideData = {
   lastSpeedMph: 0,
   lastCadenceRpm: 0,
   lastPowerWatts: 0,
-  targetPowerWatts: 200,
+  targetPowerWatts: 50,
   isRiding: false
 };
 
@@ -31,39 +31,77 @@ let isPaused = false;
 let pauseStart = null;
 let pausedTotal = 0;
 
+let isSettingPower = false;
+let nextTargetPower = null;
+let commandQueue = [];
+let isProcessingQueue = false;
+let controlPointPromiseResolver = null;
+
 async function connectToTrainer() {
   try {
     document.getElementById('connection-status').textContent = 'Scanning...';
 
     device = await navigator.bluetooth.requestDevice({
       filters: [{ services: [FTMS_SERVICE_UUID] }],
-      optionalServices: [FTMS_SERVICE_UUID, INDOOR_BIKE_DATA_CHAR_UUID, INDOOR_BIKE_POWER_POINT_CHAR_UUID, FTMS_FEATURE_CHAR_UUID, MACHINE_STATUS_CHAR_UUID, TRAINING_STATUS_CHAR_UUID]
+      optionalServices: [FTMS_SERVICE_UUID, FTMS_FEATURE_CHAR_UUID, MACHINE_STATUS_CHAR_UUID, TRAINING_STATUS_CHAR_UUID]
     });
 
     document.getElementById('connection-status').textContent = 'Connecting...';
 
     device.addEventListener('gattserverdisconnected', onDisconnected);
 
-    service = await device.gatt.connect();
-    const service = await device.gatt.getPrimaryService(FTMS_SERVICE_UUID);
+    await device.gatt.connect();
+    service = await device.gatt.getPrimaryService(FTMS_SERVICE_UUID);
 
     // Get characteristics
     indoorBikeDataCharacteristic = await service.getCharacteristic(INDOOR_BIKE_DATA_CHAR_UUID);
     powerPointCharacteristic = await service.getCharacteristic(INDOOR_BIKE_POWER_POINT_CHAR_UUID);
-    machineStatusCharacteristic = await service.getCharacteristic(MACHINE_STATUS_CHAR_UUID);
-    trainingStatusCharacteristic = await service.getCharacteristic(TRAINING_STATUS_CHAR_UUID);
+
+    // Some trainers might not support these status characteristics
+    try {
+      machineStatusCharacteristic = await service.getCharacteristic(MACHINE_STATUS_CHAR_UUID);
+      trainingStatusCharacteristic = await service.getCharacteristic(TRAINING_STATUS_CHAR_UUID);
+    } catch (e) {
+      console.log('Optional status characteristics not found');
+    }
 
     // Start notifications for indoor bike data
     await indoorBikeDataCharacteristic.startNotifications();
     indoorBikeDataCharacteristic.addEventListener('characteristicvaluechanged', handleIndoorBikeData);
 
-    // Read machine status
-    const machineStatusValue = await machineStatusCharacteristic.readValue();
-    console.log('Machine Status:', machineStatusValue);
+    // FTMS: Must enable indications on the Control Point before writing to it
+    await powerPointCharacteristic.startNotifications();
+    powerPointCharacteristic.addEventListener('characteristicvaluechanged', handleControlPointResponse);
 
     updateConnectionStatus(true);
     document.getElementById('connect-btn').disabled = true;
     document.getElementById('disconnect-btn').disabled = false;
+
+    // FTMS initialization sequence
+    console.log('Initializing trainer...');
+
+    // 1. Request Control
+    await sendControlCommand(new Uint8Array([0x00]), 'Request Control');
+
+    // 2. Reset (resets resistance/slope settings)
+    await sendControlCommand(new Uint8Array([0x01]), 'Reset');
+
+    // 3. Start/Resume
+    await sendControlCommand(new Uint8Array([0x07]), 'Start/Resume');
+
+    // 4. Set Initial Power
+    console.log('Applying initial target power...');
+    await setTargetPower();
+
+    // Read Features and Status (Useful for debugging)
+    await readFeatures();
+
+    try {
+      const machineStatusValue = await machineStatusCharacteristic.readValue();
+      console.log('Machine Status:', machineStatusValue);
+    } catch (e) {
+      console.log('Could not read machine status');
+    }
 
   } catch (error) {
     console.error('Connection failed:', error);
@@ -124,41 +162,45 @@ function handleIndoorBikeData(event) {
 
 function parseIndoorBikeData(dataView) {
   try {
-    // Flags (2 bytes)
-    const flags = dataView.getUint16(0, true);
+    let offset = 0;
+    const flags = dataView.getUint16(offset, true);
+    offset += 2;
 
-    // Instantaneous speed (m/s) - uint16 at offset 2, factor 0.01
-    let speedKmh = 0;
-    if (flags & 0x0001) {
-      speedKmh = dataView.getUint16(2, true) * 0.01 * 3.6;
-    }
+    // Instantaneous Speed is mandatory (uint16, factor 0.01, unit km/h)
+    const speedKmh = dataView.getUint16(offset, true) * 0.01;
+    offset += 2;
 
-    // Average speed (m/s) - uint16 at offset 4, factor 0.01
-    // (skipping for now)
-
-    // Instantaneous cadence (rpm) - uint8 at offset 6, factor 0.5
     let cadenceRpm = 0;
-    if (flags & 0x0002) {
-      cadenceRpm = dataView.getUint8(6) * 0.5;
-    }
-
-    // Average cadence (rpm) - uint8 at offset 7, factor 0.5
-    // (skipping)
-
-    // Total distance (m) - uint24 at offset 8
-    // (skipping)
-
-    // Resistance (0.1 units) - int16 at offset 11
-    // (skipping)
-
-    // Instantaneous power (W) - int16 at offset 13
     let powerWatts = 0;
-    if (flags & 0x0004) {
-      powerWatts = dataView.getInt16(13, true);
+
+    // Bit 1: Average Speed present (uint16, factor 0.01)
+    if (flags & (1 << 1)) offset += 2;
+
+    // Bit 2: Instantaneous Cadence present (uint16, factor 0.5, unit rpm)
+    if (flags & (1 << 2)) {
+      cadenceRpm = dataView.getUint16(offset, true) * 0.5;
+      offset += 2;
     }
 
-    // Average power (W) - int16 at offset 15
-    // (skipping)
+    // Bit 3: Average Cadence present (uint16, factor 0.5)
+    if (flags & (1 << 3)) offset += 2;
+
+    // Bit 4: Total Distance present (uint24, unit m)
+    if (flags & (1 << 4)) offset += 3;
+
+    // Bit 5: Resistance Level present (int16)
+    if (flags & (1 << 5)) offset += 2;
+
+    // Bit 6: Instantaneous Power present (int16, unit W)
+    if (flags & (1 << 6)) {
+      powerWatts = dataView.getInt16(offset, true);
+      offset += 2;
+    }
+
+    // Only log if we have non-zero data to keep console clean
+    if (speedKmh > 0 || cadenceRpm > 0 || powerWatts > 0) {
+      console.log(`Parsed Bike Data: Speed=${speedKmh.toFixed(1)}km/h, Cadence=${cadenceRpm}rpm, Power=${powerWatts}W`);
+    }
 
     return { speedKmh, cadenceRpm, powerWatts };
   } catch (e) {
@@ -167,18 +209,104 @@ function parseIndoorBikeData(dataView) {
   }
 }
 
-function setTargetPower() {
+function handleControlPointResponse(event) {
+  const value = event.target.value;
+  const opCode = value.getUint8(0);
+  const requestOpCode = value.getUint8(1);
+  const resultValue = value.getUint8(2);
+
+  // Response OpCode is always 0x80
+  if (opCode === 0x80) {
+    console.log(`Control Point Response: Request OpCode ${requestOpCode}, Result ${resultValue}`);
+
+    // Resolve the promise if we were waiting for a response
+    if (controlPointPromiseResolver) {
+      controlPointPromiseResolver({ requestOpCode, resultValue });
+      controlPointPromiseResolver = null;
+    }
+
+    if (resultValue === 0x01) {
+      console.log('Command successful');
+    } else {
+      console.warn(`Command failed with error code: ${resultValue}`);
+    }
+  }
+}
+
+async function sendControlCommand(data, label = 'Command') {
+  if (!powerPointCharacteristic) return;
+
+  console.log(`Sending ${label}...`);
+
+  // Create a promise that waits for the characteristicvaluechanged event (Indication)
+  const responsePromise = new Promise((resolve) => {
+    controlPointPromiseResolver = resolve;
+    // Timeout as fallback
+    setTimeout(() => resolve({ timeout: true }), 3000);
+  });
+
+  try {
+    await powerPointCharacteristic.writeValueWithResponse(data);
+    const response = await responsePromise;
+    if (response.timeout) {
+      console.warn(`${label} timed out waiting for indication`);
+    }
+  } catch (e) {
+    console.error(`${label} failed:`, e);
+  }
+
+  // Delay for trainer stability
+  await new Promise(r => setTimeout(r, 500));
+}
+
+async function readFeatures() {
+  try {
+    const char = await service.getCharacteristic(FTMS_FEATURE_CHAR_UUID);
+    const value = await char.readValue();
+    const machineFeatures = value.getUint32(0, true);
+    const targetFeatures = value.getUint32(4, true);
+
+    console.log(`Trainer Features: Machine=0x${machineFeatures.toString(16)}, Target=0x${targetFeatures.toString(16)}`);
+    console.log(`- Power Control Support: ${Boolean(targetFeatures & 0x02)}`);
+    console.log(`- Resistance Level Support: ${Boolean(targetFeatures & 0x01)}`);
+    console.log(`- Simulation Support: ${Boolean(targetFeatures & 0x04)}`);
+  } catch (e) {
+    console.log('Could not read features characteristic');
+  }
+}
+
+async function setTargetPower() {
   const target = parseInt(document.getElementById('target-power').value);
   if (target < 0) return;
 
   rideData.targetPowerWatts = target;
 
-  if (powerPointCharacteristic) {
-    // FTMS Power Point: 2 bytes signed integer (0.1 watts units)
-    const powerValue = target * 10; // Convert to 0.1W units
-    const data = new DataView(new ArrayBuffer(2));
-    data.setInt16(0, powerValue, true);
-    powerPointCharacteristic.writeValue(data);
+  if (!powerPointCharacteristic) return;
+
+  if (isSettingPower) {
+    nextTargetPower = target;
+    return;
+  }
+
+  isSettingPower = true;
+  try {
+    // FTMS Control Point: OpCode 0x05 (Set Target Power) + 2 bytes signed integer (1 watt units)
+    // NOTE: Many trainers defaults to high resistance if sent raw 0.1W values 
+    // but the FTMS spec confirms OpCode 0x05 is in 1W increments.
+    const powerValue = target; // Unit: 1W
+    const data = new DataView(new ArrayBuffer(3));
+    data.setUint8(0, 0x05); // OpCode: Set Target Power
+    data.setInt16(1, powerValue, true);
+    await sendControlCommand(data, `Set Power ${target}W`);
+  } catch (e) {
+    console.error('Failed to set target power:', e);
+  } finally {
+    isSettingPower = false;
+    if (nextTargetPower !== null) {
+      const val = nextTargetPower;
+      nextTargetPower = null;
+      setTargetPower();
+    }
   }
 }
 
