@@ -206,9 +206,9 @@ function parseIndoorBikeData(dataView) {
     }
 
     // Only log if we have non-zero data to keep console clean
-    if (speedKmh > 0 || cadenceRpm > 0 || powerWatts > 0) {
-      console.log(`Parsed Bike Data: Speed=${speedKmh.toFixed(1)}km/h, Cadence=${cadenceRpm}rpm, Power=${powerWatts}W`);
-    }
+    // if (speedKmh > 0 || cadenceRpm > 0 || powerWatts > 0) {
+    //   console.log(`Parsed Bike Data: Speed=${speedKmh.toFixed(1)}km/h, Cadence=${cadenceRpm}rpm, Power=${powerWatts}W`);
+    // }
 
     return { speedKmh, cadenceRpm, powerWatts };
   } catch (e) {
