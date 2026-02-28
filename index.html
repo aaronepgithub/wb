@@ -28,14 +28,40 @@
                         </div>
                     </div>
 
-                    <div class="control-section erg-section">
-                        <h3>ERG Mode</h3>
-                        <div class="control-actions">
-                            <label for="target-power">Target Power (Watts):</label>
-                            <div class="erg-side-controls">
-                                <button id="erg-decrease" class="erg-btn">−</button>
-                                <input type="number" id="target-power" min="50" max="1000" value="50" step="5">
-                                <button id="erg-increase" class="erg-btn">+</button>
+                    <div class="control-section mode-section">
+                        <h3>Training Mode</h3>
+                        <div class="control-actions-vertical">
+                            <select id="control-mode" class="mode-select">
+                                <option value="resistance" selected>Resistance</option>
+                                <option value="erg">ERG (Power)</option>
+                                <option value="incline">Incline</option>
+                            </select>
+
+                            <div id="resistance-controls" class="mode-controls">
+                                <label for="target-resistance">Resistance Level (0-100):</label>
+                                <div class="erg-side-controls">
+                                    <button id="res-decrease" class="erg-btn">−</button>
+                                    <input type="number" id="target-resistance" min="0" max="100" value="10" step="1">
+                                    <button id="res-increase" class="erg-btn">+</button>
+                                </div>
+                            </div>
+
+                            <div id="erg-controls" class="mode-controls" style="display: none;">
+                                <label for="target-power">Target Power (Watts):</label>
+                                <div class="erg-side-controls">
+                                    <button id="erg-decrease" class="erg-btn">−</button>
+                                    <input type="number" id="target-power" min="50" max="1000" value="100" step="5">
+                                    <button id="erg-increase" class="erg-btn">+</button>
+                                </div>
+                            </div>
+
+                            <div id="incline-controls" class="mode-controls" style="display: none;">
+                                <label for="target-incline">Incline (%):</label>
+                                <div class="erg-side-controls">
+                                    <button id="inc-decrease" class="erg-btn">−</button>
+                                    <input type="number" id="target-incline" min="-10" max="25" value="0" step="0.5">
+                                    <button id="inc-increase" class="erg-btn">+</button>
+                                </div>
                             </div>
                         </div>
                     </div>

@@ -23,7 +23,10 @@ let rideData = {
   lastSpeedMph: 0,
   lastCadenceRpm: 0,
   lastPowerWatts: 0,
-  targetPowerWatts: 50,
+  targetPowerWatts: 100,
+  targetResistance: 10,
+  targetIncline: 0,
+  controlMode: 'resistance',
   isRiding: false
 };
 
@@ -36,6 +39,11 @@ let nextTargetPower = null;
 let commandQueue = [];
 let isProcessingQueue = false;
 let controlPointPromiseResolver = null;
+
+let isSettingResistance = false;
+let nextTargetResistance = null;
+let isSettingIncline = false;
+let nextTargetIncline = null;
 
 async function connectToTrainer() {
   try {
@@ -89,9 +97,9 @@ async function connectToTrainer() {
     // 3. Start/Resume
     await sendControlCommand(new Uint8Array([0x07]), 'Start/Resume');
 
-    // 4. Set Initial Power
-    console.log('Applying initial target power...');
-    await setTargetPower();
+    // 4. Set Initial Control Mode
+    console.log('Applying initial control mode...');
+    await applyCurrentControlMode();
 
     // Read Features and Status (Useful for debugging)
     await readFeatures();
@@ -267,9 +275,11 @@ async function readFeatures() {
     const targetFeatures = value.getUint32(4, true);
 
     console.log(`Trainer Features: Machine=0x${machineFeatures.toString(16)}, Target=0x${targetFeatures.toString(16)}`);
-    console.log(`- Power Control Support: ${Boolean(targetFeatures & 0x02)}`);
-    console.log(`- Resistance Level Support: ${Boolean(targetFeatures & 0x01)}`);
-    console.log(`- Simulation Support: ${Boolean(targetFeatures & 0x04)}`);
+    console.log(`- Speed Target Support: ${Boolean(targetFeatures & 0x01)}`);
+    console.log(`- Incline Target Support: ${Boolean(targetFeatures & 0x02)}`);
+    console.log(`- Resistance Level Support: ${Boolean(targetFeatures & 0x04)}`);
+    console.log(`- Power Target Support: ${Boolean(targetFeatures & 0x08)}`);
+    console.log(`- Simulation Mode Support: ${Boolean(targetFeatures & 0x20)}`);
   } catch (e) {
     console.log('Could not read features characteristic');
   }
@@ -310,6 +320,96 @@ async function setTargetPower() {
   }
 }
 
+async function setTargetResistance() {
+  const target = parseInt(document.getElementById('target-resistance').value);
+  rideData.targetResistance = target;
+
+  if (!powerPointCharacteristic) return;
+
+  if (isSettingResistance) {
+    nextTargetResistance = target;
+    return;
+  }
+
+  isSettingResistance = true;
+  try {
+    // FTMS OpCode 0x04: Set Target Resistance Level (uint8, unit 1)
+    const data = new DataView(new ArrayBuffer(2));
+    data.setUint8(0, 0x04);
+    data.setUint8(1, target);
+    await sendControlCommand(data, `Set Resistance ${target}`);
+  } catch (e) {
+    console.error('Failed to set resistance:', e);
+  } finally {
+    isSettingResistance = false;
+    if (nextTargetResistance !== null) {
+      nextTargetResistance = null;
+      setTargetResistance();
+    }
+  }
+}
+
+async function setTargetIncline() {
+  const target = parseFloat(document.getElementById('target-incline').value);
+  rideData.targetIncline = target;
+
+  if (!powerPointCharacteristic) return;
+
+  if (isSettingIncline) {
+    nextTargetIncline = target;
+    return;
+  }
+
+  isSettingIncline = true;
+  try {
+    // For Indoor Bikes, "Incline" is usually set via Simulation Parameters (OpCode 0x11)
+    // rather than Target Inclination (OpCode 0x03), which is more for treadmills.
+    // OpCode 0x11: Set Indoor Bike Simulation Parameters
+    // Wind Speed (int16, 0.001 m/s) - using 0
+    // Grade (int16, 0.01 %)
+    // Rolling Resistance (uint8, 0.0001) - using 0.0033 (33)
+    // Wind Resistance (uint8, 0.01 kg/m) - using 0.51 (51)
+
+    const gradeValue = Math.round(target * 100);
+    const data = new DataView(new ArrayBuffer(7));
+    data.setUint8(0, 0x11);
+    data.setInt16(1, 0, true); // Wind Speed
+    data.setInt16(3, gradeValue, true); // Grade
+    data.setUint8(5, 33); // CRR
+    data.setUint8(6, 51); // CW
+
+    await sendControlCommand(data, `Set Simulation Grade ${target}%`);
+  } catch (e) {
+    console.error('Failed to set incline (simulation):', e);
+  } finally {
+    isSettingIncline = false;
+    if (nextTargetIncline !== null) {
+      nextTargetIncline = null;
+      setTargetIncline();
+    }
+  }
+}
+
+async function applyCurrentControlMode() {
+  const mode = document.getElementById('control-mode').value;
+  rideData.controlMode = mode;
+
+  // Toggle UI
+  document.getElementById('resistance-controls').style.display = (mode === 'resistance') ? 'flex' : 'none';
+  document.getElementById('erg-controls').style.display = (mode === 'erg') ? 'flex' : 'none';
+  document.getElementById('incline-controls').style.display = (mode === 'incline') ? 'flex' : 'none';
+
+  if (!powerPointCharacteristic) return;
+
+  if (mode === 'resistance') {
+    await setTargetResistance();
+  } else if (mode === 'erg') {
+    await setTargetPower();
+  } else if (mode === 'incline') {
+    await setTargetIncline();
+  }
+}
+
 function startRide() {
   rideData = {
     startTime: Date.now(),
@@ -321,11 +421,14 @@ function startRide() {
     lastCadenceRpm: 0,
     lastPowerWatts: 0,
     targetPowerWatts: parseInt(document.getElementById('target-power').value),
+    targetResistance: parseInt(document.getElementById('target-resistance').value),
+    targetIncline: parseFloat(document.getElementById('target-incline').value),
+    controlMode: document.getElementById('control-mode').value,
     isRiding: true
   };
 
-  // Set initial target power
-  setTargetPower();
+  // Apply current control settings
+  applyCurrentControlMode();
 
   isPaused = false;
   pausedTotal = 0;
@@ -440,6 +543,38 @@ document.getElementById('erg-decrease').addEventListener('click', () => {
   inp.value = Math.max(0, val - 5);
   setTargetPower();
 });
+
+// Resistance +/- buttons
+document.getElementById('res-increase').addEventListener('click', () => {
+  const inp = document.getElementById('target-resistance');
+  const val = parseInt(inp.value) || 0;
+  inp.value = Math.min(100, val + 1);
+  setTargetResistance();
+});
+document.getElementById('res-decrease').addEventListener('click', () => {
+  const inp = document.getElementById('target-resistance');
+  const val = parseInt(inp.value) || 0;
+  inp.value = Math.max(0, val - 1);
+  setTargetResistance();
+});
+
+// Incline +/- buttons
+document.getElementById('inc-increase').addEventListener('click', () => {
+  const inp = document.getElementById('target-incline');
+  const val = parseFloat(inp.value) || 0;
+  inp.value = (val + 0.5).toFixed(1);
+  setTargetIncline();
+});
+document.getElementById('inc-decrease').addEventListener('click', () => {
+  const inp = document.getElementById('target-incline');
+  const val = parseFloat(inp.value) || 0;
+  inp.value = (val - 0.5).toFixed(1);
+  setTargetIncline();
+});
+
+// Mode selector
+document.getElementById('control-mode').addEventListener('change', applyCurrentControlMode);
+
 
 // Pause/Resume handling
 document.getElementById('pause-ride-btn').addEventListener('click', () => {

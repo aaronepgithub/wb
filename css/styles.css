@@ -147,7 +147,52 @@ h2 {
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  transition: background 0.2s, transform 0.1s;
 }
+
+.erg-btn:active {
+  transform: scale(0.95);
+}
+
+.mode-select {
+  width: 100%;
+  padding: 10px;
+  border-radius: 6px;
+  border: 1px solid #ced4da;
+  margin-bottom: 8px;
+  background: white;
+  font-weight: 600;
+  color: #2c3e50;
+  cursor: pointer;
+  border: 1px solid #667eea;
+}
+
+.mode-select:focus {
+  outline: none;
+  box-shadow: 0 0 0 2px rgba(102, 126, 234, 0.2);
+}
+
+.control-actions-vertical {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+}
+
+.mode-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+}
+
+.mode-controls label {
+  color: #6c757d;
+  font-size: 0.8125rem;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
 
 .erg-btn:hover:not(:disabled) {
   background: #5a6fd8;
